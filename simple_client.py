@@ -1,7 +1,7 @@
 import requests
 import base64
 
-url = "http://10.24.47.116:5000/generate"
+url = "http://127.0.0.1:5000/generate"
 
 # Example message (one dialog)
 messages = [
