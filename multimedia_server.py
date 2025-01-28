@@ -15,6 +15,7 @@ from typing import Optional
 import fire
 from llama_models.llama3.api.datatypes import RawMediaItem, RawMessage, RawTextItem
 from llama_models.llama3.reference_impl.generation import Llama
+import base64
 
 app = Flask(__name__)
 
@@ -70,29 +71,63 @@ def run_server(
         }
         return jsonify(response)
 
+    
     @app.route('/generate', methods=['POST'])
     def generate():
         data = request.json
         messages = data.get('messages', [])
-        print("data recieved: ", data)
-        print("Message extracted: ", messages)
-        # Construct dialog from messages
-        dialog = []
-        #to_print_dialog = []
-        for msg in messages:
-            role = msg.get('role', 'user')
-            content = msg.get('content', [])
-            
-            # Convert content to RawMediaItem or RawTextItem
-            processed_content = []
-            for item in content:
-                if 'data' in item:
-                    processed_content.append(RawMediaItem(data=BytesIO(item['data'])))
-                if 'text' in item:
-                    processed_content.append(RawTextItem(text=item['text']))
+        print("Data received: Messages count:", len(messages))
 
-            dialog.append(RawMessage(role=role, content=processed_content))
-        
+        # Convert received messages into RawMessage objects
+        dialog = []
+        for msg in messages:
+            content = []
+            if isinstance(msg['content'], list):  # If content is a list (text + image)
+                for item in msg['content']:
+                    if item.get('type') == 'text':
+                        content.append(RawTextItem(text=item['text']))
+                        print(f"Text: {item['text']}")
+                    elif item.get('type') == 'image':
+                        image_data = base64.b64decode(item['data'])
+                        content.append(RawMediaItem(data=BytesIO(image_data)))
+                        print(f"Image received (size: {len(item['data'])} bytes in Base64)")
+            else:
+                content = msg['content']  # Direct text content
+                print(f"Text Message: {msg['content']}")
+            dialog.append(RawMessage(role=msg['role'], content=content))
+
+        for msg in dialog:
+            print("Dialogue received:------------------")
+            print(f"{msg.role.capitalize()}: {msg.content}\n")
+
+        result = generator.chat_completion(
+        dialog,
+        max_gen_len=max_gen_len,
+        temperature=temperature,
+        top_p=top_p,
+        )
+
+        out_message = result.generation
+        print("Response:------------------")
+        print(f"{out_message.role.capitalize()}: {out_message.content}")
+
+        if hasattr(out_message, "tool_calls"):
+            for t in out_message.tool_calls:
+                print(f"  Tool call: {t.tool_name} ({t.arguments})")
+
+        response = {
+            "role": out_message.role,
+            "content": out_message.content,
+        }
+        return jsonify(response)
+
+    @app.route('/generate1', methods=['POST'])
+    def generate1():
+        data = request.json
+        messages = data.get('messages', [])
+        print("data recieved: ", data)
+        # Convert received messages to RawMessage objects
+        dialog = [RawMessage(role=msg['role'], content=msg['content']) for msg in messages]
         for msg in dialog:
             print("Dialogue recieved:------------------")
             print(f"{msg.role.capitalize()}: {msg.content}\n")
@@ -110,9 +145,9 @@ def run_server(
         response = {
             "role": out_message.role,
             "content": out_message.content,
-            "tool_calls": [{"tool_name": t.tool_name, "arguments": t.arguments} for t in out_message.tool_calls]
         }
         return jsonify(response)
+
     print("Server is about to start")
     app.run(host='0.0.0.0', port=5000)
 
