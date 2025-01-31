@@ -25,7 +25,7 @@ def run_server(
     ckpt_dir: str,
     temperature: float = 0.6,
     top_p: float = 0.9,
-    max_seq_len: int = 512,
+    max_seq_len: int = 12000,
     max_batch_size: int = 4,
     max_gen_len: Optional[int] = None,
     model_parallel_size: Optional[int] = None,
